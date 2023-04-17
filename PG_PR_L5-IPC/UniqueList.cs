@@ -8,58 +8,102 @@ namespace PG_PR_L5_IPC
         List<int> numbers = new List<int>();
         StreamReader reader;
         StreamWriter writer;
+        Thread read;
+        Thread write;
         enum MessageType
         {
             Number,
-            Response
+            Response,
+            Skip
         }
-        public UniqueList(PipeStream pipe)
+        public UniqueList(PipeStream pipeIn, PipeStream pipeOut)
         {
-            reader = new StreamReader(pipe);
-            writer = new StreamWriter(pipe);
+            reader = new StreamReader(pipeIn);
+            writer = new StreamWriter(pipeOut);
 
             MessageType messageType = MessageType.Response;
             bool contain = false;
-            int num = 12;// new Random().Next();
-            bool waitForResponce = false;
+            
 
-            Thread read = new Thread(() =>
+
+            Semaphore sem = new Semaphore(0, 1);
+            Semaphore sem2 = new Semaphore(0, 1);
+            int num = 0;
+            int LOOP = 1000000;
+
+            read = new Thread(() =>
             {
-                string res;
-                (messageType, res) = ReadFromStream();
-
-                switch (messageType)
+                for(int i = 0; i < LOOP; i++)
                 {
-                    case MessageType.Number:
-                        int number = Int32.Parse(res);
-                        if (numbers.Contains(number))
-                            contain = false;
-                        else
-                        {
-                            contain = true;
-                            numbers.Add(number);
-                        }
-                        break;
+                    string res;
+                    (messageType, res) = ReadFromStream();
+                    sem2.WaitOne();    
+                    switch (messageType)
+                    {
+                        case MessageType.Number:
+                            lock (numbers)
+                            {
+                                int number = Int32.Parse(res);
+                                if (numbers.Contains(number))
+                                    contain = true;
+                                else
+                                {
+                                    contain = false;
+                                    lock (numbers)
+                                        numbers.Add(number);
+                                    Console.WriteLine($"Rec: {number}");
+                                }
+                            }
+                            break;
 
-                    case MessageType.Response:
-                        bool canAdd = Boolean.Parse(res);
+                        case MessageType.Response:
+                            bool canAdd = Boolean.Parse(res);
 
-                        if (canAdd)
-                            numbers.Add(num);
-                        else
-                            Console.WriteLine($"cannot add {num}");
-                        break;
+                            if (canAdd && !numbers.Contains(num))
+                            {
+                                Console.WriteLine($"SentSucc: {num}");
+                            }
+                            else
+                                Console.WriteLine($"cannot add");
+                            break;
+                        case MessageType.Skip:
+                            break;
+                    }
+                    sem.Release();
                 }
             });
 
-            Thread write = new Thread(() =>
+            write = new Thread(() =>
             {
-                //send data
-                if(!waitForResponce)
-                    WriteToStream(MessageType.Number, num);
-                else
-                    WriteToStream(MessageType.Response, contain);
-                //waitForResponce = !waitForResponce;
+                sem.Release();
+                for(int i = 0; i < LOOP ; i++)
+                {
+                    num =  new Random().Next();
+                    sem.WaitOne(); ;
+                    //send data
+                    if (messageType != MessageType.Number)
+                    {
+                        lock(numbers)
+                        {
+                            if (!numbers.Contains(num))
+                            {
+                                WriteToStream(MessageType.Number, num);
+                                pipeOut.WaitForPipeDrain();
+                            }
+                            else
+                            {
+                                Console.WriteLine($"cannot add2");
+                                WriteToStream(MessageType.Skip, 0);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        WriteToStream(MessageType.Response, !contain);
+                        pipeOut.WaitForPipeDrain();
+                    }
+                    sem2.Release();
+                }
             });
 
             read.Start();
@@ -67,12 +111,13 @@ namespace PG_PR_L5_IPC
 
             read.Join();
             write.Join();
+
+            Console.Write(numbers.ToString);
         }
         private void WriteToStream(MessageType messageType, dynamic msg)
         {
-            writer.WriteLineAsync($"{messageType} {msg}");
-            Console.WriteLine($"Sent: {messageType} {msg}");
-            writer.FlushAsync();
+            writer.WriteLine($"{messageType} {msg}");
+            writer.Flush();
         }
         private (MessageType, string) ReadFromStream()
         {
@@ -80,7 +125,6 @@ namespace PG_PR_L5_IPC
             while (data == null)
                 data = reader.ReadLine();
             string[] dataReceived = data.Split();
-            Console.WriteLine($"Received: {dataReceived[0]} {dataReceived[1]}");
             return (Enum.Parse<MessageType>(dataReceived[0]), dataReceived[1]);
         }
     }

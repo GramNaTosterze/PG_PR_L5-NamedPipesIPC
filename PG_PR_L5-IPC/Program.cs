@@ -18,18 +18,20 @@ class IPC
     }
     static void Server()
     {
-        var pipe = new NamedPipeServerStream(pipeName);
-        Console.Write("parent");
-        //start client, pass pipe ids as command line parameter 
+        var pipeIn = new NamedPipeServerStream(pipeName+"In");
+        var pipeOut = new NamedPipeServerStream(pipeName+"Out");
+        Console.WriteLine("parent");
+
         string clientPath = @"C:\Users\krzys\source\repos\PG_PR_L5-IPC\PG_PR_L5-IPC\bin\Debug\net6.0\PG_PR_L5-IPC.exe";
 
         var startInfo = new ProcessStartInfo(clientPath, pipeName);
         startInfo.UseShellExecute = true;
         Process childProcess = Process.Start(startInfo);
-        pipe.WaitForConnection();
+        pipeIn.WaitForConnection();
+        pipeOut.WaitForConnection();
         Console.WriteLine("Connected");
 
-        new UniqueList(pipe);
+        new UniqueList(pipeIn, pipeOut);
 
         childProcess.WaitForExit();
     }
@@ -39,11 +41,13 @@ class IPC
         Console.WriteLine("child");
 
         //create streams
-        var pipe = new NamedPipeClientStream(args[0]);
-        pipe.Connect();
+        var pipeIn = new NamedPipeClientStream(args[0]+"Out");
+        var pipeOut = new NamedPipeClientStream(args[0]+"In");
+        pipeIn.Connect();
+        pipeOut.Connect();
 
 
-        new UniqueList(pipe);
+        new UniqueList(pipeIn, pipeOut);
         
         Console.ReadLine();
     }
