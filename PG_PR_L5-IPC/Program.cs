@@ -4,10 +4,12 @@ using System.Data;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Reflection;
+using System.Xml.Linq;
 
 class IPC
 {
     const string pipeName = "PG_PR_L5-IPC";
+    const string resName = "IPC-RES";
     static void Main(string[] args)
     {
         if (args.Length == 0)
@@ -18,36 +20,33 @@ class IPC
     }
     static void Server()
     {
-        var pipeIn = new NamedPipeServerStream(pipeName+"In");
-        var pipeOut = new NamedPipeServerStream(pipeName+"Out");
         Console.WriteLine("parent");
-
         string clientPath = @"C:\Users\krzys\source\repos\PG_PR_L5-IPC\PG_PR_L5-IPC\bin\Debug\net6.0\PG_PR_L5-IPC.exe";
 
-        var startInfo = new ProcessStartInfo(clientPath, pipeName);
+        var startInfo = new ProcessStartInfo(clientPath, pipeName + " " + resName);
         startInfo.UseShellExecute = true;
         Process childProcess = Process.Start(startInfo);
-        pipeIn.WaitForConnection();
-        pipeOut.WaitForConnection();
+
+        Pipe pipe = new Pipe(new NamedPipeServerStream(pipeName + "In"), new NamedPipeServerStream(pipeName + "Out"));
+        Pipe responcePipe = new Pipe(new NamedPipeServerStream(resName + "In"), new NamedPipeServerStream(resName + "Out"));
+        
+
+
+
         Console.WriteLine("Connected");
 
-        new UniqueList(pipeIn, pipeOut);
+        new UniqueList(pipe, responcePipe);
 
         childProcess.WaitForExit();
     }
     static void Client(string[] args)
     {
-        //get pipe handle id
+        //create streams
+        Pipe pipe = new Pipe(new NamedPipeClientStream(args[0] + "Out"), new NamedPipeClientStream(args[0] + "In"));
+        Pipe responcePipe = new Pipe(new NamedPipeClientStream(args[1] + "Out"), new NamedPipeClientStream(args[1] + "In"));
         Console.WriteLine("child");
 
-        //create streams
-        var pipeIn = new NamedPipeClientStream(args[0]+"Out");
-        var pipeOut = new NamedPipeClientStream(args[0]+"In");
-        pipeIn.Connect();
-        pipeOut.Connect();
-
-
-        new UniqueList(pipeIn, pipeOut);
+        new UniqueList(pipe, responcePipe);
         
         Console.ReadLine();
     }
