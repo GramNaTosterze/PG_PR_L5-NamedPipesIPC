@@ -23,42 +23,44 @@ namespace PG_PR_L5_IPC
             responcePipe = _responcePipe;
 
             MessageType messageType = MessageType.Response;
-            bool contain = false;
+            
             
 
 
-            Semaphore sendNum = new Semaphore(1, 1);
-            Semaphore readNum = new Semaphore(0, 1);
-            int LOOP = 100000;
+            int LOOP = 100;
 
             write = new Thread(() =>
             {
                 for(int i = 0; i < LOOP; i++)
                 {
-                    //sendNum.WaitOne();
-                    lock (numbers)
+                    //lock (numbers)
                     {
-                        int num = new Random(100).Next();
+                        int num = new Random().Next(100);
                         if (!numbers.Contains(num))
                         {
                             //send number
                             mainPipe.Write(MessageType.Number, num);
-                            Console.WriteLine($"Sent: {num}");
 
                             //read responce
                             string res;
-                            //(messageType, res) = responcePipe.Read();
-                            //bool canAdd = Boolean.Parse(res);
+                            (messageType, res) = responcePipe.Read();
+                            bool canAdd = Boolean.Parse(res);
 
-                            //if (canAdd && !numbers.Contains(num))
-                            //{
-                            //    Console.WriteLine($"SentSucc: {num}");
-                            //}
-                            //else
-                            //    Console.WriteLine($"cannot add");
+                            if (canAdd && !numbers.Contains(num))
+                            {
+                                Console.WriteLine($"{num}");
+                            }
+                            else
+                                Console.WriteLine($"been in other proces");
+
                         }
+                        else
+                        {
+                            Console.WriteLine($"been here");
+                            mainPipe.Write(MessageType.Skip, num);
+                        }
+                        mainPipe.WaitForDrain();
                     }
-                    //readNum.Release();
                 }
             });
 
@@ -66,28 +68,28 @@ namespace PG_PR_L5_IPC
             {
                 for(int i = 0; i < LOOP; i++)
                 {
-                    //readNum.WaitOne();
                     //read number
+                    bool contain;
                     lock (numbers)
                     {
                         string res;
                         (messageType, res) = mainPipe.Read();
+                        if (messageType == MessageType.Skip)
+                            continue;
+
                         int number = Int32.Parse(res);
                         if (numbers.Contains(number))
                             contain = true;
                         else
                         {
                             contain = false;
-                            lock (numbers)
-                                numbers.Add(number);
-                            Console.WriteLine($"Rec: {number}");
+                            numbers.Add(number);
+                            Console.WriteLine($" {number}");
                         }
                     }
-
                     //send responce
-                    //responcePipe.Write(MessageType.Response, !contain);
-
-                    //sendNum.Release();
+                    responcePipe.Write(MessageType.Response, !contain);
+                    responcePipe.WaitForDrain();
                 }
             });
 

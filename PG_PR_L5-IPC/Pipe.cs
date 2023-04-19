@@ -12,17 +12,15 @@ namespace PG_PR_L5_IPC
     {
         PipeStream In { get; }
         PipeStream Out { get; }
-        StreamReader Reader { get; }
-        StreamWriter Writer { get; }
+        StreamReader reader;
+        StreamWriter writer;
         public Pipe(NamedPipeServerStream _in, NamedPipeServerStream _out)
         {
             In = _in;
             Out = _out;
             _in.WaitForConnection();
             _out.WaitForConnection();
-
-            Reader = new StreamReader(In);
-            Writer = new StreamWriter(Out);
+            CreateStreams();
         }
         public Pipe(NamedPipeClientStream _in, NamedPipeClientStream _out)
         {
@@ -30,22 +28,27 @@ namespace PG_PR_L5_IPC
             Out = _out;
             _in.Connect();
             _out.Connect();
-
-            Reader = new StreamReader(In);
-            Writer = new StreamWriter(Out);
+            CreateStreams();
         }
         public void Write(UniqueList.MessageType messageType, dynamic msg)
         {
-            Writer.WriteLine($"{messageType} {msg}");
-            Writer.Flush();
+            writer.WriteLine($"{messageType} {msg}");
+            writer.Flush();
         }
         public (UniqueList.MessageType, string) Read()
         {
-            string data = null;
-            while (data == null)
-                data = Reader.ReadLine();
+            string data = reader.ReadLine();
             string[] dataReceived = data.Split();
             return (Enum.Parse<UniqueList.MessageType>(dataReceived[0]), dataReceived[1]);
+        }
+        private void CreateStreams()
+        {
+            reader = new StreamReader(In);
+            writer = new StreamWriter(Out);
+        }
+        public void WaitForDrain()
+        {
+            Out.WaitForPipeDrain();
         }
     }
 }

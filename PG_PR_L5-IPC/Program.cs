@@ -21,7 +21,7 @@ class IPC
     static void Server()
     {
         Console.WriteLine("parent");
-        string clientPath = @"C:\Users\krzys\source\repos\PG_PR_L5-IPC\PG_PR_L5-IPC\bin\Debug\net6.0\PG_PR_L5-IPC.exe";
+        string clientPath = @"PG_PR_L5-IPC.exe";
 
         var startInfo = new ProcessStartInfo(clientPath, pipeName + " " + resName);
         startInfo.UseShellExecute = true;
